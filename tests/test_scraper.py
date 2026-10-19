@@ -136,6 +136,27 @@ class ScraperTests(unittest.TestCase):
         self.assertEqual(query["jenis_klpd"], ["4", "5"])
         self.assertEqual(query["sumber_dana"], ["APBD", "APBN"])
 
+    def test_filter_overrides_allow_multiple_instansi_for_both_datasets(self):
+        rup_query = parse_qs(
+            urlsplit(
+                apply_filter_overrides(
+                    DEFAULT_SOURCE_URL,
+                    ["instansi=D276", "instansi=D277"],
+                )
+            ).query
+        )
+        realisasi_query = parse_qs(
+            urlsplit(
+                apply_filter_overrides(
+                    DEFAULT_REALISASI_SOURCE_URL,
+                    ["instansi=D276", "instansi=D277"],
+                )
+            ).query
+        )
+
+        self.assertEqual(rup_query["instansi"], ["D276", "D277"])
+        self.assertEqual(realisasi_query["instansi"], ["D276", "D277"])
+
     def test_filter_overrides_reject_unknown_filter(self):
         with self.assertRaises(ValueError):
             apply_filter_overrides(DEFAULT_SOURCE_URL, ["unknown=value"])

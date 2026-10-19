@@ -72,8 +72,8 @@ available_years = sorted(
 
 st.title("INAPROC → Supabase")
 st.write(
-    "Pilih dataset dan filter dari katalog opsi INAPROC. Daftar instansi, "
-    "satker, dan filter lainnya akan menyesuaikan pilihan Anda."
+    "Pilih filter sekali untuk menjalankan scraping RUP dan Realisasi. "
+    "Anda dapat memilih beberapa instansi sekaligus."
 )
 if not available_years:
     st.error(
@@ -82,21 +82,13 @@ if not available_years:
     )
     st.stop()
 
-dataset_label = st.radio(
-    "Dataset",
-    options=("RUP", "Realisasi"),
-    horizontal=True,
-)
-dataset = "rup" if dataset_label == "RUP" else "realisasi"
-year = st.selectbox(
-    "Tahun anggaran",
-    options=available_years,
-)
+year = st.selectbox("Tahun anggaran", options=available_years)
 try:
     filter_reference = load_filter_reference(year)
 except (OSError, json.JSONDecodeError) as exc:
     st.error(f"Tidak dapat membaca katalog filter tahun {year}: {exc}")
     st.stop()
+
 filter_options = filter_reference["filters"]
 kind_options = filter_options["jenis_klpd"]
 source_options = filter_options["sumber_dana"]
@@ -113,55 +105,66 @@ selected_kinds = st.multiselect(
     format_func=_label,
 )
 
-instansi_options: list[tuple[str, dict]] = []
-for kind in selected_kinds:
-    instansi_options.extend(
-        (kind["kode"], item)
-        for item in filter_options["instansi_by_jenis"].get(kind["kode"], [])
-    )
-
+instansi_options = [
+    (kind["kode"], instansi)
+    for kind in selected_kinds
+    for instansi in filter_options["instansi_by_jenis"].get(kind["kode"], [])
+]
+instansi_by_key = {
+    f"{kind_code}:{instansi['kode']}": (kind_code, instansi)
+    for kind_code, instansi in instansi_options
+}
 default_instansi = next(
     (
-        option
-        for option in instansi_options
-        if option[1]["kode"] == "D276" and option[0] == "4"
+        key
+        for key, (kind_code, instansi) in instansi_by_key.items()
+        if kind_code == "4" and instansi["kode"] == "D276"
     ),
     None,
 )
-selected_instansi = st.selectbox(
-    "Instansi",
-    options=[None, *instansi_options],
-    index=(
-        instansi_options.index(default_instansi) + 1
-        if default_instansi is not None
-        else 0
-    ),
-    format_func=lambda option: (
-        "Semua instansi"
-        if option is None
-        else f"{option[1]['nama']} ({option[1]['kode']})"
-    ),
+selected_instansi_keys = st.multiselect(
+    "Instansi (pilih satu atau lebih)",
+    options=list(instansi_by_key),
+    default=[default_instansi] if default_instansi is not None else [],
+    format_func=lambda key: _label(instansi_by_key[key][1]),
 )
 
-dependent_options: dict[str, list[dict]] = {"satker": [], "eselon": []}
-if selected_instansi is not None:
-    kind_code, instansi = selected_instansi
-    instansi_key = f"{kind_code}:{instansi['kode']}"
-    dependent_options["satker"] = filter_options["satker_by_instansi"].get(
-        instansi_key, []
-    )
+satker_by_key: dict[str, dict] = {}
+eselon_by_key: dict[str, dict] = {}
+for instansi_key in selected_instansi_keys:
+    kind_code, instansi = instansi_by_key[instansi_key]
+    dependent_key = f"{kind_code}:{instansi['kode']}"
+    for satker in filter_options["satker_by_instansi"].get(dependent_key, []):
+        option_key = f"{dependent_key}:{satker['kode']}"
+        satker_by_key[option_key] = {
+            **satker,
+            "instansi_nama": instansi["nama"],
+        }
     if kind_code in {"1", "2"}:
-        dependent_options["eselon"] = filter_options["eselon_by_instansi"].get(
-            instansi_key, []
-        )
+        for eselon in filter_options["eselon_by_instansi"].get(dependent_key, []):
+            option_key = f"{dependent_key}:{eselon['kode']}"
+            eselon_by_key[option_key] = {
+                **eselon,
+                "instansi_nama": instansi["nama"],
+            }
+
+
+def _dependent_label(option_key: str, options: dict[str, dict]) -> str:
+    option = options[option_key]
+    return (
+        f"{option['nama']} ({option['kode']}) — {option['instansi_nama']}"
+    )
+
 
 column_left, column_right = st.columns(2)
 with column_left:
     selected_satker = st.selectbox(
         "Satuan kerja",
-        options=[None, *dependent_options["satker"]],
-        format_func=lambda option: (
-            "Semua satuan kerja" if option is None else _label(option)
+        options=[None, *satker_by_key],
+        format_func=lambda key: (
+            "Semua satuan kerja"
+            if key is None
+            else _dependent_label(key, satker_by_key)
         ),
     )
     selected_sources = st.multiselect(
@@ -172,9 +175,13 @@ with column_left:
 with column_right:
     selected_eselon = st.selectbox(
         "Eselon",
-        options=[None, *dependent_options["eselon"]],
-        format_func=lambda option: "Semua eselon" if option is None else _label(option),
-        disabled=not dependent_options["eselon"],
+        options=[None, *eselon_by_key],
+        format_func=lambda key: (
+            "Semua eselon"
+            if key is None
+            else _dependent_label(key, eselon_by_key)
+        ),
+        disabled=not eselon_by_key,
     )
     selected_procurement = st.multiselect(
         "Cara pengadaan",
@@ -187,12 +194,8 @@ with st.expander("Filter tambahan dan pencarian"):
         "Status paket (pisahkan beberapa nilai dengan koma)",
         placeholder="Contoh: ON PROCESS, SELESAI",
     )
-    search_field = (
-        "search_rup" if dataset == "rup" else "search_paket"
-    )
     search_value = st.text_input(
-        "Cari berdasarkan kode/nama paket",
-        key=f"{dataset}_search",
+        "Cari berdasarkan kode/nama paket (berlaku untuk kedua dataset)"
     )
     advanced_text = st.text_area(
         "Filter API lain, satu KEY=VALUE per baris",
@@ -203,31 +206,26 @@ with st.expander("Filter tambahan dan pencarian"):
         height=100,
     )
 
-filter_pairs: list[tuple[str, str]] = [("tahun", year)]
-kind_key = "jenis_klpd" if dataset == "rup" else "jenis"
-filter_pairs.extend((kind_key, item["kode"]) for item in selected_kinds)
-if selected_instansi is not None:
-    kind_code, instansi = selected_instansi
-    filter_pairs.append(("instansi", instansi["kode"]))
-    if selected_eselon is not None:
-        filter_pairs.append(("eselon", selected_eselon["kode"]))
-    if selected_satker is not None:
-        filter_pairs.append(("satker", selected_satker["kode"]))
-filter_pairs.extend(
-    ("sumber_dana", item["kode"]) for item in selected_sources
+common_filter_pairs: list[tuple[str, str]] = [("tahun", year)]
+common_filter_pairs.extend(
+    ("instansi", instansi_by_key[key][1]["kode"])
+    for key in selected_instansi_keys
 )
-filter_pairs.extend(
+common_filter_pairs.extend(("sumber_dana", item["kode"]) for item in selected_sources)
+common_filter_pairs.extend(
     ("filter_metode", item["kode"]) for item in selected_procurement
 )
-
 if status_paket.strip():
-    filter_pairs.extend(
+    common_filter_pairs.extend(
         ("status_paket", value)
         for value in _filter_values(status_paket, "status_paket")
     )
-if search_value.strip():
-    filter_pairs.append((search_field, search_value.strip()))
+if selected_satker is not None:
+    common_filter_pairs.append(("satker", satker_by_key[selected_satker]["kode"]))
+if selected_eselon is not None:
+    common_filter_pairs.append(("eselon", eselon_by_key[selected_eselon]["kode"]))
 
+advanced_filter_pairs: list[tuple[str, str]] = []
 for line_number, line in enumerate(advanced_text.splitlines(), start=1):
     value = line.strip()
     if not value:
@@ -239,28 +237,40 @@ for line_number, line in enumerate(advanced_text.splitlines(), start=1):
             "KEY=VALUE dengan KEY yang didukung."
         )
         st.stop()
-    filter_pairs.append((key, filter_value.strip()))
+    advanced_filter_pairs.append((key, filter_value.strip()))
 
-filters = [f"{key}={value}" for key, value in filter_pairs]
-source_url = (
-    "https://data.inaproc.id/rup"
-    if dataset == "rup"
-    else "https://data.inaproc.id/realisasi"
+dataset_plans: list[tuple[str, str, int]] = []
+for dataset, source_url, kind_key, search_key in (
+    ("rup", "https://data.inaproc.id/rup", "jenis_klpd", "search_rup"),
+    ("realisasi", "https://data.inaproc.id/realisasi", "jenis", "search_paket"),
+):
+    filter_pairs = list(common_filter_pairs)
+    filter_pairs.extend((kind_key, item["kode"]) for item in selected_kinds)
+    if search_value.strip():
+        filter_pairs.append((search_key, search_value.strip()))
+    filter_pairs.extend(advanced_filter_pairs)
+    filters = [f"{key}={value}" for key, value in filter_pairs]
+    try:
+        filtered_source_url = apply_filter_overrides(source_url, filters)
+    except ValueError as exc:
+        st.error(f"Filter tidak valid untuk {dataset.upper()}: {exc}")
+        st.stop()
+    dataset_plans.append((dataset, filtered_source_url, len(filters)))
+
+st.caption(
+    "Filter aktif — "
+    + "; ".join(
+        f"{dataset.upper()}: {count}"
+        for dataset, _, count in dataset_plans
+    )
 )
-try:
-    filtered_source_url = apply_filter_overrides(source_url, filters)
-except ValueError as exc:
-    st.error(f"Filter tidak valid: {exc}")
-    st.stop()
-
-st.caption(f"Filter aktif: {len(filters)}")
 st.warning(
-    "Scraping dapat mengambil banyak data jika hanya tahun yang dipilih. "
-    "Pilih instansi atau satuan kerja untuk membatasi hasil."
+    "Satu kali proses menjalankan RUP dan Realisasi secara berurutan. "
+    "Scraping dapat mengambil banyak data jika cakupan instansi terlalu luas."
 )
 
 sync_clicked = st.button(
-    "Ambil data dan simpan ke Supabase",
+    "Jalankan RUP + Realisasi dan simpan ke Supabase",
     type="primary",
     use_container_width=True,
 )
@@ -273,47 +283,77 @@ if sync_clicked:
         )
         st.stop()
 
+    from supabase import create_client
+
     try:
-        with st.spinner("Mengambil seluruh halaman data INAPROC..."):
-            rows = (
-                fetch_rows(filtered_source_url)
-                if dataset == "rup"
-                else fetch_realisasi_rows(filtered_source_url)
-            )
-        if not rows:
-            st.info("Tidak ada data yang cocok dengan filter.")
-        else:
+        client = create_client(supabase_url, supabase_key)
+    except SupabaseException as exc:
+        st.error(f"Tidak dapat menghubungkan ke Supabase: {exc}")
+        st.stop()
+    results: dict[str, list[dict]] = {}
+    failures: dict[str, str] = {}
+    for dataset, filtered_source_url, _ in dataset_plans:
+        st.subheader(f"Dataset {dataset.upper()}")
+        try:
+            with st.spinner(f"Mengambil semua halaman {dataset.upper()}..."):
+                rows = (
+                    fetch_rows(filtered_source_url)
+                    if dataset == "rup"
+                    else fetch_realisasi_rows(filtered_source_url)
+                )
+            if not rows:
+                st.info(f"Tidak ada data {dataset.upper()} yang cocok.")
+                results[dataset] = []
+                continue
             records = (
                 prepare_records(rows, filtered_source_url)
                 if dataset == "rup"
                 else prepare_realisasi_records(rows, filtered_source_url)
             )
-            with st.spinner(f"Menyimpan {len(records)} baris ke Supabase..."):
-                from supabase import create_client
-
-                client = create_client(supabase_url, supabase_key)
+            with st.spinner(
+                f"Menyimpan {len(records)} baris {dataset.upper()} ke Supabase..."
+            ):
                 saved_count = sync_records(client, dataset, records)
-            table = "inaproc_rup" if dataset == "rup" else "inaproc_realisasi"
+            results[dataset] = rows
+            table = "inaproc_realisasi" if dataset == "realisasi" else "inaproc_rup"
             st.success(
                 f"Berhasil menyimpan {saved_count} baris ke public.{table}."
             )
-            st.dataframe(rows[:100], use_container_width=True)
-            if len(rows) > 100:
-                st.caption("Pratinjau dibatasi 100 baris pertama.")
-            csv_path = export_rows_csv(
-                rows,
-                Path("exports")
-                / (
-                    "inaproc_rup.csv"
-                    if dataset == "rup"
-                    else "inaproc_realisasi.csv"
-                ),
-            )
-            st.download_button(
-                "Unduh hasil sebagai CSV",
-                data=csv_path.read_bytes(),
-                file_name=csv_path.name,
-                mime="text/csv",
-            )
-    except (APIError, HTTPError, OSError, RuntimeError, SupabaseException, ValueError) as exc:
-        st.error(f"Proses gagal: {exc}")
+        except (
+            APIError,
+            HTTPError,
+            OSError,
+            RuntimeError,
+            SupabaseException,
+            ValueError,
+        ) as exc:
+            failures[dataset] = str(exc)
+            st.error(f"Dataset {dataset.upper()} gagal: {exc}")
+
+    for dataset, rows in results.items():
+        if not rows:
+            continue
+        st.dataframe(rows[:100], use_container_width=True)
+        if len(rows) > 100:
+            st.caption(f"Pratinjau {dataset.upper()} dibatasi 100 baris pertama.")
+        csv_path = export_rows_csv(
+            rows,
+            Path("exports")
+            / (
+                "inaproc_rup.csv"
+                if dataset == "rup"
+                else "inaproc_realisasi.csv"
+            ),
+        )
+        st.download_button(
+            f"Unduh {dataset.upper()} sebagai CSV",
+            data=csv_path.read_bytes(),
+            file_name=csv_path.name,
+            mime="text/csv",
+            key=f"download_{dataset}",
+        )
+    if failures:
+        st.error(
+            "Sebagian dataset gagal. Dataset yang berhasil tetap sudah "
+            "disimpan; periksa pesan error masing-masing di atas."
+        )

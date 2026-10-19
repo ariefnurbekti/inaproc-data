@@ -70,6 +70,7 @@ FILTER_KEYS = {
 MULTI_VALUE_FILTERS = {
     "jenis",
     "jenis_klpd",
+    "instansi",
     "sumber_dana",
     "status_paket",
 }

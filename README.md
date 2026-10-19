@@ -86,12 +86,15 @@ ulangi opsinya, misalnya
 
 ## UI web melalui GitHub dan Streamlit
 
-`app.py` menyediakan UI web dengan pilihan dataset dan dropdown yang dapat
-dicari. Pilihan jenis, instansi, eselon, dan satker dimuat bertahap dari file
-katalog filter di `reference`, sehingga aplikasi tetap dapat menampilkan opsi
-jika host deployment tidak dapat mengakses API filter INAPROC. Sumber dana dan
-cara pengadaan juga berupa pilihan. Status paket dan filter pencarian yang
-nilainya bebas diisi pada bagian **Filter tambahan dan pencarian**.
+`app.py` menyediakan UI web dengan dropdown yang dapat dicari. Anda dapat
+memilih beberapa instansi sekaligus; sekali klik, scraper mengambil dataset
+RUP dan Realisasi secara berurutan dengan filter yang sama, lalu menyimpan
+masing-masing ke tabel Supabase yang sesuai. Pilihan jenis, instansi, eselon,
+dan satker dimuat dari katalog filter di `reference`, sehingga UI tidak
+bergantung pada API opsi saat dibuka. Sumber dana dan cara pengadaan juga
+berupa pilihan. Status paket dan pencarian berlaku untuk kedua dataset.
+Jika salah satu permintaan dataset gagal, proses tetap mencoba dataset lainnya
+dan menampilkan status sukses/gagal secara terpisah.
 
 GitHub menyimpan source code; Streamlit Community Cloud menjalankan aplikasi
 Python dan UI. GitHub Pages saja tidak dapat menjalankan scraper Python atau
@@ -117,8 +120,9 @@ Untuk deploy:
    SUPABASE_SERVICE_ROLE_KEY = "sb_secret_..."
    ```
 
-4. Deploy atau restart aplikasi. Pilih dataset, atur dropdown filter, lalu
-   klik **Ambil data dan simpan ke Supabase**. Hasil bisa diunduh sebagai CSV.
+4. Deploy atau restart aplikasi. Pilih satu atau beberapa instansi, atur filter,
+   lalu klik **Jalankan RUP + Realisasi dan simpan ke Supabase**. Hasil kedua
+   dataset bisa diunduh sebagai CSV.
 
 Filter jenis instansi, instansi, satker, eselon, sumber dana, dan cara
 pengadaan menggunakan pilihan kode/nama dari snapshot katalog INAPROC.
