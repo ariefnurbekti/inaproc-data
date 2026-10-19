@@ -350,14 +350,14 @@ class ScraperTests(unittest.TestCase):
 
         report = build_execution_status_report(rup_rows, realization_rows)
 
-        self.assertEqual(report[0]["status_pelaksanaan"], "ADA_REKAMAN_REALISASI")
+        self.assertEqual(report[0]["status_pelaksanaan"], "Sudah klik")
         self.assertEqual(report[0]["jumlah_paket_realisasi"], 2)
         self.assertEqual(report[0]["status_paket_realisasi"], "ON PROCESS; SELESAI")
         self.assertEqual(
             report[0]["nama_penyedia_realisasi"], "Penyedia A; Penyedia B"
         )
         self.assertEqual(
-            report[1]["status_pelaksanaan"], "BELUM_ADA_REKAMAN_REALISASI"
+            report[1]["status_pelaksanaan"], "Belum klik"
         )
 
     def test_export_rows_csv_writes_all_columns_and_rows(self):

@@ -73,8 +73,9 @@ st.caption(
     "yang tersimpan di Supabase."
 )
 st.info(
-    "Tanpa rekaman Realisasi berarti belum ditemukan rekaman pada data yang "
-    "discrape—bukan bukti pasti pekerjaan belum dilakukan. Penyedia yang "
+    "Label sudah/belum klik menunjukkan status pencocokan paket dengan data "
+    "Realisasi yang discrape, bukan bukti pasti pekerjaan sudah atau belum "
+    "dilakukan. Penyedia yang "
     "ditampilkan adalah nama penyedia dari sumber INAPROC, bukan verifikasi "
     "pemenang kontrak secara terpisah."
 )
@@ -144,16 +145,16 @@ if rup_truncated or realization_truncated:
 total_rup = len(dashboard_rows)
 with_records = sum(row["jumlah_paket_realisasi"] > 0 for row in dashboard_rows)
 completed = sum(
-    row["indikasi_penyelesaian"] == "Selesai (menurut status INAPROC)"
+    row["status_realisasi_selesai"]
     for row in dashboard_rows
 )
 not_recorded = total_rup - with_records
 
 metric_columns = st.columns(4)
 metric_columns[0].metric("Paket RUP", f"{total_rup:,}")
-metric_columns[1].metric("Ada rekaman Realisasi", f"{with_records:,}")
+metric_columns[1].metric("Sudah klik", f"{with_records:,}")
 metric_columns[2].metric("Status tercatat selesai", f"{completed:,}")
-metric_columns[3].metric("Belum ada rekaman Realisasi", f"{not_recorded:,}")
+metric_columns[3].metric("Belum klik", f"{not_recorded:,}")
 
 try:
     instansi_names = _load_instansi_names(selected_year)
@@ -173,7 +174,7 @@ with filter_columns[1]:
         placeholder="Contoh: kode RUP, nama paket, atau penyedia",
     ).strip().casefold()
 with filter_columns[2]:
-    status_choices = ["Semua", "Selesai", "Ada rekaman", "Belum ada rekaman"]
+    status_choices = ["Semua", "Selesai", "Sudah klik", "Belum klik"]
     selected_status = st.selectbox("Status pekerjaan", status_choices)
 
 filtered_rows = dashboard_rows
@@ -202,16 +203,13 @@ if selected_status == "Selesai":
     filtered_rows = [
         row
         for row in filtered_rows
-        if row["indikasi_penyelesaian"] == "Selesai (menurut status INAPROC)"
+        if row["status_realisasi_selesai"]
     ]
-elif selected_status == "Ada rekaman":
+elif selected_status == "Sudah klik":
     filtered_rows = [
-        row
-        for row in filtered_rows
-        if row["jumlah_paket_realisasi"] > 0
-        and row["indikasi_penyelesaian"] != "Selesai (menurut status INAPROC)"
+        row for row in filtered_rows if row["jumlah_paket_realisasi"] > 0
     ]
-elif selected_status == "Belum ada rekaman":
+elif selected_status == "Belum klik":
     filtered_rows = [
         row for row in filtered_rows if row["jumlah_paket_realisasi"] == 0
     ]
@@ -224,7 +222,7 @@ display_columns = {
     "nama_satker": "Satuan kerja",
     "tahun_anggaran": "Tahun",
     "total_nilai": "Nilai RUP",
-    "indikasi_penyelesaian": "Indikasi penyelesaian",
+    "status_pelaksanaan": "Status klik",
     "jumlah_paket_realisasi": "Jumlah paket Realisasi",
     "kode_paket_realisasi": "Kode paket Realisasi",
     "status_paket_realisasi": "Status Realisasi",

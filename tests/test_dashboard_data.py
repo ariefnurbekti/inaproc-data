@@ -6,7 +6,7 @@ from dashboard_data import build_dashboard_rows, fetch_dataset_rows
 
 
 class DashboardDataTests(unittest.TestCase):
-    def test_build_dashboard_rows_distinguishes_completed_and_unrecorded(self):
+    def test_build_dashboard_rows_distinguishes_click_and_completion_status(self):
         report = build_dashboard_rows(
             [
                 {"kode_rup": "RUP-1", "nama_paket": "Selesai"},
@@ -32,12 +32,12 @@ class DashboardDataTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            [row["indikasi_penyelesaian"] for row in report],
-            [
-                "Selesai (menurut status INAPROC)",
-                "Ada rekaman Realisasi",
-                "Belum ada rekaman Realisasi",
-            ],
+            [row["status_pelaksanaan"] for row in report],
+            ["Sudah klik", "Sudah klik", "Belum klik"],
+        )
+        self.assertEqual(
+            [row["status_realisasi_selesai"] for row in report],
+            [True, False, False],
         )
         self.assertEqual(report[0]["nama_penyedia_realisasi"], "Penyedia A")
 

@@ -54,10 +54,10 @@ def build_dashboard_rows(rup_rows: list[dict], realization_rows: list[dict]) -> 
             for status in row["status_paket_realisasi"].split(";")
             if status.strip()
         ]
-        if not row["jumlah_paket_realisasi"]:
-            row["indikasi_penyelesaian"] = "Belum ada rekaman Realisasi"
-        elif statuses and all(status in COMPLETED_STATUSES for status in statuses):
-            row["indikasi_penyelesaian"] = "Selesai (menurut status INAPROC)"
-        else:
-            row["indikasi_penyelesaian"] = "Ada rekaman Realisasi"
+        row["status_realisasi_selesai"] = bool(statuses) and all(
+            status in COMPLETED_STATUSES for status in statuses
+        )
+        row["status_pelaksanaan"] = (
+            "Sudah klik" if row["jumlah_paket_realisasi"] else "Belum klik"
+        )
     return report

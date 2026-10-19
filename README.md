@@ -101,12 +101,14 @@ Halaman **Dashboard Paket INAPROC** dapat dibuka dari navigasi Streamlit.
 Pilih tahun, muat data dari Supabase, lalu filter berdasarkan instansi, teks
 paket/kode/penyedia, atau status. Dashboard mencocokkan Realisasi dengan RUP
 melalui `kode_rup` dan menampilkan status Realisasi, tahap pengadaan, serta
-nama penyedia. Status tanpa rekaman diberi label **Belum ada rekaman Realisasi**;
-ini tidak memastikan pekerjaan belum dilakukan. Nama penyedia berasal dari
-kolom `nama_penyedia`, bukan verifikasi pemenang secara terpisah. Dashboard
-membaca maksimal 10.000 baris per tabel untuk tahun terpilih dan memberi
-peringatan jika batas tersebut tercapai. Filter tampilan instansi/pencarian
-diterapkan setelah data termuat dan tidak mengubah batas pembacaan tersebut.
+nama penyedia. Label **Sudah klik** dan **Belum klik** menunjukkan status
+pencocokan paket terhadap data Realisasi, bukan memastikan pekerjaan sudah atau
+belum dilakukan. Status INAPROC dan nama penyedia tetap ditampilkan terpisah;
+nama penyedia berasal dari kolom `nama_penyedia`, bukan verifikasi pemenang
+secara terpisah. Dashboard membaca maksimal 10.000 baris per tabel untuk tahun
+terpilih dan memberi peringatan jika batas tersebut tercapai. Filter tampilan
+instansi/pencarian diterapkan setelah data termuat dan tidak mengubah batas
+pembacaan tersebut.
 
 GitHub menyimpan source code; Streamlit Community Cloud menjalankan aplikasi
 Python dan UI. GitHub Pages saja tidak dapat menjalankan scraper Python atau
@@ -172,12 +174,12 @@ py scraper.py --compare-realisasi
 ```
 
 Laporan bawaan tersimpan di `exports\inaproc_status_pelaksanaan.csv`. Baris
-`ADA_REKAMAN_REALISASI` mempunyai satu atau lebih kode paket Realisasi, status,
-tahapan pengadaan, dan penyedia. Baris `BELUM_ADA_REKAMAN_REALISASI` berarti
-tidak ditemukan paket yang cocok berdasarkan `kode_rup` pada hasil Realisasi;
-ini bukan bukti mutlak bahwa pekerjaan belum dilakukan, karena pencatatan atau
-cakupan sumber Realisasi dapat berbeda. Kolom status dan penyedia Realisasi
-dibiarkan kosong jika tidak ada data pasangannya.
+**Sudah klik** mempunyai satu atau lebih kode paket Realisasi, status, tahapan
+pengadaan, dan penyedia. **Belum klik** berarti tidak ditemukan paket yang
+cocok berdasarkan `kode_rup` pada hasil Realisasi; ini bukan bukti mutlak
+bahwa pekerjaan belum dilakukan, karena pencatatan atau cakupan sumber
+Realisasi dapat berbeda. Kolom status dan penyedia Realisasi dibiarkan kosong
+jika tidak ada data pasangannya.
 
 Untuk menyimpan daftar kode pilihan filter yang tersedia di situs sebagai
 referensi JSON:

@@ -606,9 +606,7 @@ def build_execution_status_report(
             {
                 **rup_row,
                 "status_pelaksanaan": (
-                    "ADA_REKAMAN_REALISASI"
-                    if matches
-                    else "BELUM_ADA_REKAMAN_REALISASI"
+                    "Sudah klik" if matches else "Belum klik"
                 ),
                 "jumlah_paket_realisasi": len(matches),
                 "kode_paket_realisasi": joined_values("kode_paket"),
@@ -861,12 +859,12 @@ def main() -> None:
     if args.compare_realisasi is not None:
         path = export_rows_csv(rows, args.compare_realisasi)
         with_data = sum(
-            row["status_pelaksanaan"] == "ADA_REKAMAN_REALISASI" for row in rows
+            row["status_pelaksanaan"] == "Sudah klik" for row in rows
         )
         print(
             f"Laporan perbandingan tersimpan: {path.resolve()} "
-            f"({len(rows)} RUP; {with_data} ada rekaman Realisasi; "
-            f"{len(rows) - with_data} belum ada rekaman Realisasi)."
+            f"({len(rows)} RUP; {with_data} sudah klik; "
+            f"{len(rows) - with_data} belum klik)."
         )
         return
     if args.export_csv is not None:
