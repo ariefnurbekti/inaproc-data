@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
+from httpx import HTTPError
+from postgrest.exceptions import APIError
+from supabase import SupabaseException
 
 from scraper import (
-    AVAILABLE_YEARS,
     FILTER_KEYS,
     apply_filter_overrides,
     export_rows_csv,
-    fetch_filter_options,
     fetch_realisasi_rows,
     fetch_rows,
     prepare_realisasi_records,
@@ -21,24 +23,17 @@ from scraper import (
     sync_records,
 )
 
+REFERENCE_DIR = Path(__file__).parent / "reference"
 
 st.set_page_config(page_title="INAPROC → Supabase", page_icon="📊", layout="wide")
 load_dotenv()
 
 
 @st.cache_data(ttl=86_400, show_spinner=False)
-def cached_filter_options(
-    category: str,
-    year: str = "",
-    kind_code: str = "",
-    instansi_code: str = "",
-) -> list[dict]:
-    return fetch_filter_options(
-        category,
-        year=year or None,
-        kind_code=kind_code or None,
-        instansi_code=instansi_code or None,
-    )
+def load_filter_reference(year: str) -> dict:
+    path = REFERENCE_DIR / f"inaproc_filter_codes_{year}.json"
+    with path.open(encoding="utf-8") as reference_file:
+        return json.load(reference_file)
 
 
 def _label(item: dict) -> str:
@@ -66,11 +61,26 @@ def _get_supabase_credentials() -> tuple[str, str]:
     return url, key
 
 
+available_years = sorted(
+    (
+        path.stem.removeprefix("inaproc_filter_codes_")
+        for path in REFERENCE_DIR.glob("inaproc_filter_codes_*.json")
+        if path.stem.removeprefix("inaproc_filter_codes_").isdigit()
+    ),
+    reverse=True,
+)
+
 st.title("INAPROC → Supabase")
 st.write(
-    "Pilih dataset dan filter dari opsi INAPROC. Daftar instansi, satker, "
-    "dan filter lainnya akan menyesuaikan pilihan Anda."
+    "Pilih dataset dan filter dari katalog opsi INAPROC. Daftar instansi, "
+    "satker, dan filter lainnya akan menyesuaikan pilihan Anda."
 )
+if not available_years:
+    st.error(
+        "Katalog filter belum tersedia. Tambahkan file "
+        "reference/inaproc_filter_codes_<tahun>.json ke repository."
+    )
+    st.stop()
 
 dataset_label = st.radio(
     "Dataset",
@@ -80,17 +90,17 @@ dataset_label = st.radio(
 dataset = "rup" if dataset_label == "RUP" else "realisasi"
 year = st.selectbox(
     "Tahun anggaran",
-    options=AVAILABLE_YEARS,
-    index=AVAILABLE_YEARS.index("2026"),
+    options=available_years,
 )
-
 try:
-    kind_options = cached_filter_options("jenis_klpd")
-    source_options = cached_filter_options("sumber_dana")
-    procurement_options = cached_filter_options("cara_pengadaan")
-except (RuntimeError, ValueError) as exc:
-    st.error(f"Tidak dapat memuat opsi filter INAPROC: {exc}")
+    filter_reference = load_filter_reference(year)
+except (OSError, json.JSONDecodeError) as exc:
+    st.error(f"Tidak dapat membaca katalog filter tahun {year}: {exc}")
     st.stop()
+filter_options = filter_reference["filters"]
+kind_options = filter_options["jenis_klpd"]
+source_options = filter_options["sumber_dana"]
+procurement_options = filter_options["cara_pengadaan"]
 
 kind_index = next(
     (index for index, item in enumerate(kind_options) if item["kode"] == "4"),
@@ -104,17 +114,11 @@ selected_kinds = st.multiselect(
 )
 
 instansi_options: list[tuple[str, dict]] = []
-try:
-    for kind in selected_kinds:
-        instansi_options.extend(
-            (kind["kode"], item)
-            for item in cached_filter_options(
-                "instansi", year=year, kind_code=kind["kode"]
-            )
-        )
-except (RuntimeError, ValueError) as exc:
-    st.error(f"Tidak dapat memuat daftar instansi: {exc}")
-    st.stop()
+for kind in selected_kinds:
+    instansi_options.extend(
+        (kind["kode"], item)
+        for item in filter_options["instansi_by_jenis"].get(kind["kode"], [])
+    )
 
 default_instansi = next(
     (
@@ -142,23 +146,14 @@ selected_instansi = st.selectbox(
 dependent_options: dict[str, list[dict]] = {"satker": [], "eselon": []}
 if selected_instansi is not None:
     kind_code, instansi = selected_instansi
-    try:
-        dependent_options["satker"] = cached_filter_options(
-            "satker",
-            year=year,
-            kind_code=kind_code,
-            instansi_code=instansi["kode"],
+    instansi_key = f"{kind_code}:{instansi['kode']}"
+    dependent_options["satker"] = filter_options["satker_by_instansi"].get(
+        instansi_key, []
+    )
+    if kind_code in {"1", "2"}:
+        dependent_options["eselon"] = filter_options["eselon_by_instansi"].get(
+            instansi_key, []
         )
-        if kind_code in {"1", "2"}:
-            dependent_options["eselon"] = cached_filter_options(
-                "eselon",
-                year=year,
-                kind_code=kind_code,
-                instansi_code=instansi["kode"],
-            )
-    except (RuntimeError, ValueError) as exc:
-        st.error(f"Tidak dapat memuat opsi satker/eselon: {exc}")
-        st.stop()
 
 column_left, column_right = st.columns(2)
 with column_left:
@@ -320,5 +315,5 @@ if sync_clicked:
                 file_name=csv_path.name,
                 mime="text/csv",
             )
-    except Exception as exc:
+    except (APIError, HTTPError, OSError, RuntimeError, SupabaseException, ValueError) as exc:
         st.error(f"Proses gagal: {exc}")

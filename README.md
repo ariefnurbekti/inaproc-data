@@ -87,10 +87,11 @@ ulangi opsinya, misalnya
 ## UI web melalui GitHub dan Streamlit
 
 `app.py` menyediakan UI web dengan pilihan dataset dan dropdown yang dapat
-dicari. Pilihan jenis, instansi, eselon, dan satker dimuat bertahap dari API
-INAPROC. Sumber dana dan cara pengadaan juga berupa pilihan. Status paket dan
-filter pencarian yang nilainya bebas diisi pada bagian **Filter tambahan dan
-pencarian**.
+dicari. Pilihan jenis, instansi, eselon, dan satker dimuat bertahap dari file
+katalog filter di `reference`, sehingga aplikasi tetap dapat menampilkan opsi
+jika host deployment tidak dapat mengakses API filter INAPROC. Sumber dana dan
+cara pengadaan juga berupa pilihan. Status paket dan filter pencarian yang
+nilainya bebas diisi pada bagian **Filter tambahan dan pencarian**.
 
 GitHub menyimpan source code; Streamlit Community Cloud menjalankan aplikasi
 Python dan UI. GitHub Pages saja tidak dapat menjalankan scraper Python atau
@@ -120,7 +121,11 @@ Untuk deploy:
    klik **Ambil data dan simpan ke Supabase**. Hasil bisa diunduh sebagai CSV.
 
 Filter jenis instansi, instansi, satker, eselon, sumber dana, dan cara
-pengadaan menggunakan pilihan kode/nama dari API INAPROC. Beberapa filter
+pengadaan menggunakan pilihan kode/nama dari snapshot katalog INAPROC.
+Repository harus menyertakan file `reference/inaproc_filter_codes_<tahun>.json`
+untuk setiap tahun yang ingin ditawarkan di UI. Perbarui katalog dengan
+`py scraper.py --export-filter-reference --reference-year 2026`, commit file
+JSON hasilnya, lalu push agar deployment memakai pilihan terbaru. Beberapa filter
 pencarian atau status yang nilainya ditentukan sendiri tetap berupa input teks.
 Pilih instansi atau satker untuk menghindari permintaan data yang terlalu luas.
 Secret Supabase hanya disimpan di Streamlit Secrets; jangan masukkan ke kode,

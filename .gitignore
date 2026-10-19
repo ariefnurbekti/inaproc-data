@@ -5,6 +5,7 @@ __pycache__/
 .streamlit/secrets.toml
 exports/*.csv
 reference/*.json
+!reference/inaproc_filter_codes_*.json
 
 # Object file
 *.o
