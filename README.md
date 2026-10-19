@@ -97,6 +97,17 @@ diisi beberapa nilai dipisahkan koma; pencarian teks yang sama diterapkan ke
 kedua dataset. Jika satu proses gagal, proses berikutnya tetap dijalankan dan
 status sukses/gagal ditampilkan per kombinasi.
 
+Halaman **Dashboard Paket INAPROC** dapat dibuka dari navigasi Streamlit.
+Pilih tahun, muat data dari Supabase, lalu filter berdasarkan instansi, teks
+paket/kode/penyedia, atau status. Dashboard mencocokkan Realisasi dengan RUP
+melalui `kode_rup` dan menampilkan status Realisasi, tahap pengadaan, serta
+nama penyedia. Status tanpa rekaman diberi label **Belum ada rekaman Realisasi**;
+ini tidak memastikan pekerjaan belum dilakukan. Nama penyedia berasal dari
+kolom `nama_penyedia`, bukan verifikasi pemenang secara terpisah. Dashboard
+membaca maksimal 10.000 baris per tabel untuk tahun terpilih dan memberi
+peringatan jika batas tersebut tercapai. Filter tampilan instansi/pencarian
+diterapkan setelah data termuat dan tidak mengubah batas pembacaan tersebut.
+
 GitHub menyimpan source code; Streamlit Community Cloud menjalankan aplikasi
 Python dan UI. GitHub Pages saja tidak dapat menjalankan scraper Python atau
 menyimpan kredensial server secara aman.
