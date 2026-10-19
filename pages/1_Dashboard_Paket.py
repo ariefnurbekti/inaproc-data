@@ -274,6 +274,31 @@ st.bar_chart(status_chart, height=220)
 st.subheader(f"Hasil paket ({format_indonesian_number(len(filtered_rows))})")
 if filtered_rows:
     table = pd.DataFrame(filtered_rows)
+    rup_sort_options = {
+        "Urutan asli": None,
+        "Nilai RUP: terbesar ke terkecil": False,
+        "Nilai RUP: terkecil ke terbesar": True,
+    }
+    sort_choice = st.selectbox(
+        "Urutkan paket",
+        options=list(rup_sort_options),
+        key="dashboard_rup_sort",
+        on_change=lambda: st.session_state.__setitem__("dashboard_page", 0),
+    )
+    if "total_nilai" in table.columns and rup_sort_options[sort_choice] is not None:
+        table["_dashboard_sort_value"] = pd.to_numeric(
+            table["total_nilai"], errors="coerce"
+        )
+        table = (
+            table.sort_values(
+                "_dashboard_sort_value",
+                ascending=rup_sort_options[sort_choice],
+                na_position="last",
+                kind="stable",
+            )
+            .drop(columns="_dashboard_sort_value")
+            .reset_index(drop=True)
+        )
     available_columns = [
         column for column in display_columns if column in table.columns
     ]
@@ -394,11 +419,15 @@ if filtered_rows:
     if selected_order:
         visible_table = table.iloc[start_row:end_row][selected_order].copy()
         if "total_nilai" in visible_table.columns:
-            visible_table["total_nilai"] = visible_table["total_nilai"].map(
-                format_indonesian_currency
+            visible_table["total_nilai"] = pd.to_numeric(
+                visible_table["total_nilai"], errors="coerce"
             )
         st.dataframe(
-            visible_table.rename(columns=display_columns),
+            visible_table.rename(columns=display_columns)
+            .style.format(
+                {"Nilai RUP": format_indonesian_currency},
+                na_rep="—",
+            ),
             use_container_width=True,
             hide_index=True,
             height=min(620, 38 + (end_row - start_row) * 35),
