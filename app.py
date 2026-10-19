@@ -14,7 +14,8 @@ from supabase import SupabaseException
 
 from scraper import (
     FILTER_KEYS,
-    apply_filter_overrides,
+    build_filter_combinations,
+    build_sequential_dataset_plan,
     export_rows_csv,
     fetch_realisasi_rows,
     fetch_rows,
@@ -82,7 +83,16 @@ if not available_years:
     )
     st.stop()
 
-year = st.selectbox("Tahun anggaran", options=available_years)
+selected_years = st.multiselect(
+    "Tahun anggaran (pilih satu atau lebih)",
+    options=available_years,
+    default=available_years[:1],
+)
+if not selected_years:
+    st.info("Pilih setidaknya satu tahun anggaran.")
+    st.stop()
+
+year = selected_years[0]
 try:
     filter_reference = load_filter_reference(year)
 except (OSError, json.JSONDecodeError) as exc:
@@ -158,14 +168,10 @@ def _dependent_label(option_key: str, options: dict[str, dict]) -> str:
 
 column_left, column_right = st.columns(2)
 with column_left:
-    selected_satker = st.selectbox(
+    selected_satker_keys = st.multiselect(
         "Satuan kerja",
-        options=[None, *satker_by_key],
-        format_func=lambda key: (
-            "Semua satuan kerja"
-            if key is None
-            else _dependent_label(key, satker_by_key)
-        ),
+        options=list(satker_by_key),
+        format_func=lambda key: _dependent_label(key, satker_by_key),
     )
     selected_sources = st.multiselect(
         "Sumber dana",
@@ -173,14 +179,10 @@ with column_left:
         format_func=_label,
     )
 with column_right:
-    selected_eselon = st.selectbox(
+    selected_eselon_keys = st.multiselect(
         "Eselon",
-        options=[None, *eselon_by_key],
-        format_func=lambda key: (
-            "Semua eselon"
-            if key is None
-            else _dependent_label(key, eselon_by_key)
-        ),
+        options=list(eselon_by_key),
+        format_func=lambda key: _dependent_label(key, eselon_by_key),
         disabled=not eselon_by_key,
     )
     selected_procurement = st.multiselect(
@@ -206,24 +208,9 @@ with st.expander("Filter tambahan dan pencarian"):
         height=100,
     )
 
-common_filter_pairs: list[tuple[str, str]] = [("tahun", year)]
-common_filter_pairs.extend(
-    ("instansi", instansi_by_key[key][1]["kode"])
-    for key in selected_instansi_keys
+selected_statuses = (
+    _filter_values(status_paket, "status_paket") if status_paket.strip() else []
 )
-common_filter_pairs.extend(("sumber_dana", item["kode"]) for item in selected_sources)
-common_filter_pairs.extend(
-    ("filter_metode", item["kode"]) for item in selected_procurement
-)
-if status_paket.strip():
-    common_filter_pairs.extend(
-        ("status_paket", value)
-        for value in _filter_values(status_paket, "status_paket")
-    )
-if selected_satker is not None:
-    common_filter_pairs.append(("satker", satker_by_key[selected_satker]["kode"]))
-if selected_eselon is not None:
-    common_filter_pairs.append(("eselon", eselon_by_key[selected_eselon]["kode"]))
 
 advanced_filter_pairs: list[tuple[str, str]] = []
 for line_number, line in enumerate(advanced_text.splitlines(), start=1):
@@ -239,40 +226,86 @@ for line_number, line in enumerate(advanced_text.splitlines(), start=1):
         st.stop()
     advanced_filter_pairs.append((key, filter_value.strip()))
 
-dataset_plans: list[tuple[str, str, int]] = []
-for dataset, source_url, kind_key, search_key in (
-    ("rup", "https://data.inaproc.id/rup", "jenis_klpd", "search_rup"),
-    ("realisasi", "https://data.inaproc.id/realisasi", "jenis", "search_paket"),
-):
-    filter_pairs = list(common_filter_pairs)
-    filter_pairs.extend((kind_key, item["kode"]) for item in selected_kinds)
-    if search_value.strip():
-        filter_pairs.append((search_key, search_value.strip()))
-    filter_pairs.extend(advanced_filter_pairs)
-    filters = [f"{key}={value}" for key, value in filter_pairs]
-    try:
-        filtered_source_url = apply_filter_overrides(source_url, filters)
-    except ValueError as exc:
-        st.error(f"Filter tidak valid untuk {dataset.upper()}: {exc}")
-        st.stop()
-    dataset_plans.append((dataset, filtered_source_url, len(filters)))
+scope_groups: list[list[tuple[str, str]]] = []
+if selected_instansi_keys:
+    for instansi_key in selected_instansi_keys:
+        kind_code, instansi = instansi_by_key[instansi_key]
+        dependent_key = f"{kind_code}:{instansi['kode']}"
+        selected_satkers = [
+            satker_by_key[key]
+            for key in selected_satker_keys
+            if key.startswith(f"{dependent_key}:")
+        ]
+        selected_eselons = [
+            eselon_by_key[key]
+            for key in selected_eselon_keys
+            if key.startswith(f"{dependent_key}:")
+        ]
+        if selected_satkers and selected_eselons:
+            local_scopes = [
+                [("satker", satker["kode"]), ("eselon", eselon["kode"])]
+                for satker in selected_satkers
+                for eselon in selected_eselons
+            ]
+        elif selected_satkers:
+            local_scopes = [[("satker", satker["kode"])] for satker in selected_satkers]
+        elif selected_eselons:
+            local_scopes = [[("eselon", eselon["kode"])] for eselon in selected_eselons]
+        elif selected_satker_keys or selected_eselon_keys:
+            continue
+        else:
+            local_scopes = [[]]
+        for scope in local_scopes:
+            scope_groups.append(
+                [
+                    ("jenis_klpd", kind_code),
+                    ("instansi", instansi["kode"]),
+                    *scope,
+                ]
+            )
+elif selected_kinds:
+    scope_groups.extend(
+        [("jenis_klpd", kind["kode"])] for kind in selected_kinds
+    )
+else:
+    scope_groups.append([])
+
+filter_groups: list[list[list[tuple[str, str]]]] = [
+    [[("tahun", selected_year)] for selected_year in selected_years],
+    scope_groups or [[]],
+    [[("sumber_dana", item["kode"])] for item in selected_sources],
+    [[("filter_metode", item["kode"])] for item in selected_procurement],
+    [[("status_paket", value)] for value in selected_statuses],
+]
+combinations = build_filter_combinations(filter_groups)
+
+try:
+    dataset_plans = build_sequential_dataset_plan(
+        combinations,
+        search_value=search_value.strip(),
+        additional_filters=advanced_filter_pairs,
+    )
+except ValueError as exc:
+    st.error(f"Filter tidak valid: {exc}")
+    st.stop()
 
 st.caption(
-    "Filter aktif — "
-    + "; ".join(
-        f"{dataset.upper()}: {count}"
-        for dataset, _, count in dataset_plans
-    )
+    f"{len(combinations)} kombinasi filter; "
+    f"{len(dataset_plans)} proses dataset (RUP + Realisasi per kombinasi)."
 )
 st.warning(
-    "Satu kali proses menjalankan RUP dan Realisasi secara berurutan. "
-    "Scraping dapat mengambil banyak data jika cakupan instansi terlalu luas."
+    "Setiap kombinasi diproses satu per satu: RUP terlebih dahulu, kemudian "
+    "Realisasi. Banyak pilihan filter dapat menghasilkan banyak permintaan."
+)
+confirmed = st.checkbox(
+    f"Saya memahami bahwa {len(dataset_plans)} proses dataset akan berjalan berurutan."
 )
 
 sync_clicked = st.button(
     "Jalankan RUP + Realisasi dan simpan ke Supabase",
     type="primary",
     use_container_width=True,
+    disabled=not confirmed,
 )
 if sync_clicked:
     supabase_url, supabase_key = _get_supabase_credentials()
@@ -290,20 +323,35 @@ if sync_clicked:
     except SupabaseException as exc:
         st.error(f"Tidak dapat menghubungkan ke Supabase: {exc}")
         st.stop()
-    results: dict[str, list[dict]] = {}
-    failures: dict[str, str] = {}
-    for dataset, filtered_source_url, _ in dataset_plans:
-        st.subheader(f"Dataset {dataset.upper()}")
+    results: dict[str, dict[str, dict]] = {"rup": {}, "realisasi": {}}
+    saved_counts = {"rup": 0, "realisasi": 0}
+    failures: list[str] = []
+    progress = st.progress(0, text="Menyiapkan proses...")
+    for process_index, (dataset, filtered_source_url, combination_index) in enumerate(
+        dataset_plans, start=1
+    ):
+        progress.progress(
+            (process_index - 1) / len(dataset_plans),
+            text=(
+                f"Kombinasi {combination_index}/{len(combinations)} — "
+                f"{dataset.upper()} ({process_index}/{len(dataset_plans)})"
+            ),
+        )
         try:
-            with st.spinner(f"Mengambil semua halaman {dataset.upper()}..."):
+            with st.spinner(
+                f"Kombinasi {combination_index}/{len(combinations)}: "
+                f"mengambil {dataset.upper()}..."
+            ):
                 rows = (
                     fetch_rows(filtered_source_url)
                     if dataset == "rup"
                     else fetch_realisasi_rows(filtered_source_url)
                 )
             if not rows:
-                st.info(f"Tidak ada data {dataset.upper()} yang cocok.")
-                results[dataset] = []
+                st.info(
+                    f"Kombinasi {combination_index}: tidak ada data "
+                    f"{dataset.upper()} yang cocok."
+                )
                 continue
             records = (
                 prepare_records(rows, filtered_source_url)
@@ -311,13 +359,20 @@ if sync_clicked:
                 else prepare_realisasi_records(rows, filtered_source_url)
             )
             with st.spinner(
-                f"Menyimpan {len(records)} baris {dataset.upper()} ke Supabase..."
+                f"Menyimpan {len(records)} baris {dataset.upper()} "
+                f"(kombinasi {combination_index}) ke Supabase..."
             ):
                 saved_count = sync_records(client, dataset, records)
-            results[dataset] = rows
+            code_column = "kode_rup" if dataset == "rup" else "kode_paket"
+            results[dataset].update(
+                (record[code_column], row)
+                for record, row in zip(records, rows, strict=True)
+            )
+            saved_counts[dataset] += saved_count
             table = "inaproc_realisasi" if dataset == "realisasi" else "inaproc_rup"
             st.success(
-                f"Berhasil menyimpan {saved_count} baris ke public.{table}."
+                f"Kombinasi {combination_index}: berhasil menyimpan "
+                f"{saved_count} baris ke public.{table}."
             )
         except (
             APIError,
@@ -327,15 +382,22 @@ if sync_clicked:
             SupabaseException,
             ValueError,
         ) as exc:
-            failures[dataset] = str(exc)
-            st.error(f"Dataset {dataset.upper()} gagal: {exc}")
+            failures.append(
+                f"Kombinasi {combination_index} {dataset.upper()}: {exc}"
+            )
+            st.error(f"Kombinasi {combination_index} {dataset.upper()} gagal: {exc}")
 
-    for dataset, rows in results.items():
+    progress.progress(1.0, text="Semua kombinasi selesai.")
+    for dataset, dataset_rows in results.items():
+        rows = list(dataset_rows.values())
         if not rows:
             continue
         st.dataframe(rows[:100], use_container_width=True)
         if len(rows) > 100:
-            st.caption(f"Pratinjau {dataset.upper()} dibatasi 100 baris pertama.")
+            st.caption(
+                f"Pratinjau {dataset.upper()} dibatasi 100 baris pertama "
+                f"dari {len(rows)} kode unik."
+            )
         csv_path = export_rows_csv(
             rows,
             Path("exports")
@@ -352,8 +414,15 @@ if sync_clicked:
             mime="text/csv",
             key=f"download_{dataset}",
         )
+    st.info(
+        "Total operasi upsert — "
+        + "; ".join(
+            f"{dataset.upper()}: {count}"
+            for dataset, count in saved_counts.items()
+        )
+    )
     if failures:
         st.error(
-            "Sebagian dataset gagal. Dataset yang berhasil tetap sudah "
-            "disimpan; periksa pesan error masing-masing di atas."
+            f"{len(failures)} proses gagal. Proses lainnya tetap berjalan. "
+            "Periksa pesan error masing-masing di atas."
         )

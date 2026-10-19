@@ -86,15 +86,16 @@ ulangi opsinya, misalnya
 
 ## UI web melalui GitHub dan Streamlit
 
-`app.py` menyediakan UI web dengan dropdown yang dapat dicari. Anda dapat
-memilih beberapa instansi sekaligus; sekali klik, scraper mengambil dataset
-RUP dan Realisasi secara berurutan dengan filter yang sama, lalu menyimpan
-masing-masing ke tabel Supabase yang sesuai. Pilihan jenis, instansi, eselon,
-dan satker dimuat dari katalog filter di `reference`, sehingga UI tidak
-bergantung pada API opsi saat dibuka. Sumber dana dan cara pengadaan juga
-berupa pilihan. Status paket dan pencarian berlaku untuk kedua dataset.
-Jika salah satu permintaan dataset gagal, proses tetap mencoba dataset lainnya
-dan menampilkan status sukses/gagal secara terpisah.
+`app.py` menyediakan UI web dengan dropdown multi-select yang dapat dicari
+untuk tahun, jenis, instansi, satker, eselon, sumber dana, dan cara pengadaan.
+Setiap kombinasi pilihan dibuat sebagai pekerjaan terpisah; satu klik memproses
+semua kombinasi secara berurutan, masing-masing dengan RUP lalu Realisasi.
+Hasil setiap dataset masuk ke tabel Supabase yang sesuai. Pilihan jenis,
+instansi, eselon, dan satker dimuat dari katalog filter di `reference`,
+sehingga UI tidak bergantung pada API opsi saat dibuka. Status paket dapat
+diisi beberapa nilai dipisahkan koma; pencarian teks yang sama diterapkan ke
+kedua dataset. Jika satu proses gagal, proses berikutnya tetap dijalankan dan
+status sukses/gagal ditampilkan per kombinasi.
 
 GitHub menyimpan source code; Streamlit Community Cloud menjalankan aplikasi
 Python dan UI. GitHub Pages saja tidak dapat menjalankan scraper Python atau
@@ -120,9 +121,10 @@ Untuk deploy:
    SUPABASE_SERVICE_ROLE_KEY = "sb_secret_..."
    ```
 
-4. Deploy atau restart aplikasi. Pilih satu atau beberapa instansi, atur filter,
-   lalu klik **Jalankan RUP + Realisasi dan simpan ke Supabase**. Hasil kedua
-   dataset bisa diunduh sebagai CSV.
+4. Deploy atau restart aplikasi. Pilih satu atau beberapa nilai di setiap
+   filter yang diperlukan, tinjau jumlah kombinasi dan proses dataset, centang
+   konfirmasi, lalu klik **Jalankan RUP + Realisasi dan simpan ke Supabase**.
+   Hasil kedua dataset bisa diunduh sebagai CSV.
 
 Filter jenis instansi, instansi, satker, eselon, sumber dana, dan cara
 pengadaan menggunakan pilihan kode/nama dari snapshot katalog INAPROC.

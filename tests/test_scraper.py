@@ -18,6 +18,8 @@ from scraper import (
     apply_filter_overrides,
     build_api_url,
     build_execution_status_report,
+    build_filter_combinations,
+    build_sequential_dataset_plan,
     build_realisasi_api_url,
     build_signed_headers,
     export_filter_reference,
@@ -35,6 +37,58 @@ from scraper import (
 
 
 class ScraperTests(unittest.TestCase):
+    def test_build_filter_combinations_creates_independent_sequential_jobs(self):
+        combinations = build_filter_combinations(
+            [
+                [[("tahun", "2025")], [("tahun", "2026")]],
+                [[("instansi", "D276")], [("instansi", "D277")]],
+                [[("sumber_dana", "APBN")], [("sumber_dana", "APBD")]],
+                [],
+            ]
+        )
+
+        self.assertEqual(len(combinations), 8)
+        self.assertEqual(
+            combinations[0],
+            [
+                ("tahun", "2025"),
+                ("instansi", "D276"),
+                ("sumber_dana", "APBN"),
+            ],
+        )
+        self.assertEqual(
+            combinations[-1],
+            [
+                ("tahun", "2026"),
+                ("instansi", "D277"),
+                ("sumber_dana", "APBD"),
+            ],
+        )
+        self.assertEqual(build_filter_combinations([[], []]), [[]])
+
+    def test_sequential_dataset_plan_runs_both_datasets_per_combination(self):
+        plan = build_sequential_dataset_plan(
+            [
+                [("tahun", "2025"), ("jenis_klpd", "4"), ("instansi", "D276")],
+                [("tahun", "2026"), ("jenis_klpd", "5"), ("instansi", "D277")],
+            ],
+            search_value="Paket",
+            additional_filters=[("sumber_dana", "APBD")],
+        )
+
+        self.assertEqual(
+            [(dataset, index) for dataset, _, index in plan],
+            [("rup", 1), ("realisasi", 1), ("rup", 2), ("realisasi", 2)],
+        )
+        rup_query = parse_qs(urlsplit(plan[0][1]).query)
+        realisasi_query = parse_qs(urlsplit(plan[1][1]).query)
+        self.assertEqual(rup_query["jenis_klpd"], ["4"])
+        self.assertEqual(realisasi_query["jenis"], ["4"])
+        self.assertEqual(rup_query["search_rup"], ["Paket"])
+        self.assertEqual(realisasi_query["search_paket"], ["Paket"])
+        self.assertEqual(rup_query["instansi"], ["D276"])
+        self.assertEqual(realisasi_query["instansi"], ["D276"])
+
     @patch("scraper._fetch_filter_items")
     def test_fetch_filter_options_builds_dependent_query(self, mock_fetch_items):
         mock_fetch_items.return_value = [{"kode": "S1", "nama": "Satker A"}]

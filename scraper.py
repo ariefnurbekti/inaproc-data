@@ -12,6 +12,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
+from itertools import product
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -74,6 +75,52 @@ MULTI_VALUE_FILTERS = {
     "sumber_dana",
     "status_paket",
 }
+
+
+def build_filter_combinations(
+    filter_groups: list[list[list[tuple[str, str]]]],
+) -> list[list[tuple[str, str]]]:
+    """Build one filter set per Cartesian combination of selected values."""
+    active_groups = [group for group in filter_groups if group]
+    if not active_groups:
+        return [[]]
+    return [
+        [
+            filter_pair
+            for selected_option in combination
+            for filter_pair in selected_option
+        ]
+        for combination in product(*active_groups)
+    ]
+
+
+def build_sequential_dataset_plan(
+    combinations: list[list[tuple[str, str]]],
+    *,
+    search_value: str = "",
+    additional_filters: list[tuple[str, str]] | None = None,
+) -> list[tuple[str, str, int]]:
+    """Build serial RUP-then-Realisasi jobs for every filter combination."""
+    dataset_sources = (
+        ("rup", "https://data.inaproc.id/rup", "search_rup"),
+        ("realisasi", "https://data.inaproc.id/realisasi", "search_paket"),
+    )
+    plan = []
+    for combination_index, combination in enumerate(combinations, start=1):
+        for dataset, source_url, search_key in dataset_sources:
+            filter_pairs = list(combination)
+            if search_value:
+                filter_pairs.append((search_key, search_value))
+            filter_pairs.extend(additional_filters or [])
+            filters = [f"{key}={value}" for key, value in filter_pairs]
+            plan.append(
+                (
+                    dataset,
+                    apply_filter_overrides(source_url, filters),
+                    combination_index,
+                )
+            )
+    return plan
 
 
 def apply_filter_overrides(source_url: str, filters: list[str]) -> str:
