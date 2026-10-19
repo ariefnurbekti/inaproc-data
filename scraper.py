@@ -676,10 +676,14 @@ def sync_records(client, dataset: str, records: list[dict]) -> int:
         "rup": ("inaproc_rup", "kode_rup"),
         "realisasi": ("inaproc_realisasi", "kode_paket"),
     }[dataset]
-    for start in range(0, len(records), SUPABASE_BATCH_SIZE):
-        batch = records[start : start + SUPABASE_BATCH_SIZE]
+    unique_records = {
+        record[conflict_key]: record for record in records
+    }
+    deduplicated_records = list(unique_records.values())
+    for start in range(0, len(deduplicated_records), SUPABASE_BATCH_SIZE):
+        batch = deduplicated_records[start : start + SUPABASE_BATCH_SIZE]
         client.table(table).upsert(batch, on_conflict=conflict_key).execute()
-    return len(records)
+    return len(deduplicated_records)
 
 
 def test_supabase_connection(supabase_url: str, supabase_key: str) -> list[str]:

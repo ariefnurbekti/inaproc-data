@@ -414,6 +414,27 @@ class ScraperTests(unittest.TestCase):
         self.assertEqual(len(calls[1].args[0]), 1)
         self.assertEqual(calls[0].kwargs["on_conflict"], "kode_rup")
 
+    def test_sync_records_deduplicates_conflict_keys_and_keeps_latest_row(self):
+        client = Mock()
+        records = [
+            {"kode_paket": "PKT-1", "data": {"versi": 1}},
+            {"kode_paket": "PKT-2", "data": {"versi": 1}},
+            {"kode_paket": "PKT-1", "data": {"versi": 2}},
+        ]
+
+        saved_count = sync_records(client, "realisasi", records)
+
+        self.assertEqual(saved_count, 2)
+        client.table.assert_called_once_with("inaproc_realisasi")
+        upserted_records = client.table.return_value.upsert.call_args.args[0]
+        self.assertEqual(
+            upserted_records,
+            [
+                {"kode_paket": "PKT-1", "data": {"versi": 2}},
+                {"kode_paket": "PKT-2", "data": {"versi": 1}},
+            ],
+        )
+
     @patch("scraper.urlopen")
     def test_fetch_rows_follows_cursors_until_last_page(self, mock_urlopen):
         responses = [
