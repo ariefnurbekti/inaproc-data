@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 from scraper import build_execution_status_report
 
 DASHBOARD_PAGE_SIZE = 1000
 DASHBOARD_MAX_ROWS_PER_TABLE = 10_000
 COMPLETED_STATUSES = {"SELESAI", "COMPLETED", "DONE", "FINISHED"}
+
+
+def format_indonesian_number(value: int) -> str:
+    """Format an integer with Indonesian thousands separators."""
+    return f"{value:,}".replace(",", ".")
+
+
+def format_indonesian_currency(value: object) -> str:
+    """Format numeric values as whole Rupiah using Indonesian separators."""
+    if value is None or not str(value).strip():
+        return "—"
+    try:
+        amount = Decimal(str(value).strip().replace("Rp", "").strip())
+    except InvalidOperation:
+        return str(value)
+    if not amount.is_finite():
+        return str(value)
+    return f"Rp {format(amount, ',.0f').replace(',', '.')}"
 
 
 def fetch_dataset_rows(client, table_name: str, year: str) -> tuple[list[dict], bool]:

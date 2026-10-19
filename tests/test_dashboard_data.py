@@ -2,10 +2,23 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from dashboard_data import build_dashboard_rows, fetch_dataset_rows
+from dashboard_data import (
+    build_dashboard_rows,
+    fetch_dataset_rows,
+    format_indonesian_currency,
+    format_indonesian_number,
+)
 
 
 class DashboardDataTests(unittest.TestCase):
+    def test_format_indonesian_currency_uses_period_grouping(self):
+        self.assertEqual(format_indonesian_currency(1234567), "Rp 1.234.567")
+        self.assertEqual(format_indonesian_currency(0), "Rp 0")
+        self.assertEqual(format_indonesian_currency(None), "—")
+
+    def test_format_indonesian_number_uses_period_grouping(self):
+        self.assertEqual(format_indonesian_number(1234567), "1.234.567")
+
     def test_build_dashboard_rows_distinguishes_click_and_completion_status(self):
         report = build_dashboard_rows(
             [

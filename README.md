@@ -101,7 +101,12 @@ Halaman **Dashboard Paket INAPROC** dapat dibuka dari navigasi Streamlit.
 Pilih tahun, muat data dari Supabase, lalu filter berdasarkan instansi, teks
 paket/kode/penyedia, atau status. Dashboard mencocokkan Realisasi dengan RUP
 melalui `kode_rup` dan menampilkan status Realisasi, tahap pengadaan, serta
-nama penyedia. Label **Sudah klik** dan **Belum klik** menunjukkan status
+nama penyedia. Ringkasan dan tabel bergaya analitik menampilkan metrik paket
+serta diagram status; pilih kolom tabel, geser kolom ke kiri atau kanan, dan
+gunakan tombol halaman untuk menavigasi hasil dalam kelompok 25, 50, atau 100
+baris. Nilai RUP ditampilkan dalam Rupiah dengan pemisah ribuan Indonesia
+(contoh: `Rp 1.234.567`); ekspor CSV tetap menyimpan nilai sumbernya. Label
+**Sudah klik** dan **Belum klik** menunjukkan status
 pencocokan paket terhadap data Realisasi, bukan memastikan pekerjaan sudah atau
 belum dilakukan. Status INAPROC dan nama penyedia tetap ditampilkan terpisah;
 nama penyedia berasal dari kolom `nama_penyedia`, bukan verifikasi pemenang
